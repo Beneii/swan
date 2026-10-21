@@ -1,0 +1,13 @@
+node_modules/
+**/data/
+**/.swan/
+.env
+.env.*
+*.db
+*.db-*
+*.log
+resources/
+runtime/
+*.exe
+*.asar
+.vibe-wise/

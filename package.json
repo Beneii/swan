@@ -1,0 +1,13 @@
+{
+  "name": "swan-coordinator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Claude Code coordination harness; experimental desktop integration source",
+  "scripts": {
+    "test": "node scripts/test-core.mjs"
+  },
+  "engines": {
+    "node": ">=24.13.0"
+  }
+}

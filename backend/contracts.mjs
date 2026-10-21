@@ -1,0 +1,11 @@
+import {EndpointSchemas as main} from '../resources/app/out/main/local-bootstrap-schemas-0.mjs';
+import {EndpointSchemas as shared} from '../resources/app/out/main/local-bootstrap-schemas-1.mjs';
+import {decodeEither} from '../resources/app/out/main/local-client-schemas.mjs';
+import {Et as decodeSync} from '../resources/app/out/main/Stream-Bwe0WorW.js';
+export const schemas={...main,...shared};
+export function emptyValue(ast,depth=0){if(depth>35)throw Error('Schema recursion limit');if(ast.context?.isOptional)return undefined;if(ast.annotations?.representation?.id==='effect/schema/Date')return new Date().toISOString();if(ast.encoding?.length)return emptyValue(ast.encoding[0].to,depth+1);
+ switch(ast._tag){case 'String':return 'local';case 'Number':return 0;case 'Boolean':return false;case 'Literal':return ast.literal;case 'Null':return null;case 'Undefined':return undefined;case 'Objects':{const result={};for(const p of ast.propertySignatures||[]){const value=emptyValue(p.type,depth+1);if(value!==undefined)result[p.name]=value;}return result;}case 'Arrays':return (ast.elements||[]).map(x=>emptyValue(x.type||x,depth+1));case 'Union':{const nullable=ast.types.find(x=>x._tag==='Null');if(nullable)return null;const first=ast.types.find(x=>x._tag!=='Undefined');return first?emptyValue(first,depth+1):undefined;}case 'Suspend':return emptyValue(ast.thunk(),depth+1);case 'Declaration':throw Error('Unknown declaration '+ast.annotations?.identifier);case 'Unknown':case 'Any':return null;default:throw Error('Unsupported schema AST '+ast._tag);}}
+export function validate(schema,data){return decodeEither(schema)(data)._tag==='Some';}
+export function explain(schema,data){try{decodeSync(schema)(data);return null;}catch(error){return error.message;}}
+export const emptyResponses=new Map();
+for(const [name,schema]of Object.entries(schemas)){if(/^(create|add|update|delete|rename|join|set|replace|remove|archive|unarchive|restore|leave|upload|promote|demote|cancel|interrupt|send)\w* /.test(name)||name==='manifest /orgs/:orgId/drive/:volumeId/versions/:versionId')continue;try{const value=emptyValue(schema.ast);if(!validate(schema,value)){console.error('Empty metadata rejected by original schema:',name);continue;}emptyResponses.set(name,value);}catch(error){console.error('Metadata not synthesized:',name,error.message);}}

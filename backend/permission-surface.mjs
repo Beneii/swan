@@ -1,0 +1,17 @@
+import {ownerId} from './ownership.mjs';
+import {schemas,validate,explain} from './contracts.mjs';
+export const localDeviceId='swan-local-device';
+export class PermissionSurface {
+ constructor(store,engine){this.store=store;this.engine=engine;}
+ live(question){return question.status==='open'&&(['review','delivery'].includes(question.kind)||question.kind==='permission'&&this.engine.approvals.has(question.id));}
+ row(question,threadId=question.sessionId){const session=this.store.get('session',question.sessionId);return {id:question.id,capability:'execution',deviceId:localDeviceId,deviceName:question.kind==='delivery'?'Delivery evidence':question.kind==='review'?'Task acceptance':'This PC · one operation',threadId,requesterJamId:question.sessionId,userId:'user_swan_local',status:question.status==='open'?'requested':question.status==='approved'?'granted':'denied',toolCallId:question.toolCallId||question.id,toolName:question.toolName,toolInput:question.input,workspaceRoot:session?.cwd||'',requestedAt:question.createdAt,resolvedAt:question.status==='open'?null:question.updatedAt};}
+ checked(name,body){const schema=schemas[name];if(!schema||!validate(schema,body))throw Error('Permission response rejected: '+(schema?explain(schema,body):name));return {status:200,body};}
+ route(method,url,body={}){const parts=url.pathname.split('/').filter(Boolean);if(parts[0]!=='orgs'||parts[1]!=='org_swan_local')return null;
+  if(method==='GET'&&parts[2]==='threads'&&parts[4]==='agent-access'&&parts.length===5){const session=this.store.get('session',parts[3]);if(!session)return {status:404,body:{error:'Thread not found'}};const questions=this.store.list('question').filter(q=>this.live(q)&&(q.sessionId===session.id||session.role==='captain'&&ownerId(this.store.get('session',q.sessionId))===session.id));return this.checked('listThreadAgentAccess /orgs/:orgId/threads/:threadId/agent-access',questions.map(q=>this.row(q,session.id)));}
+  if(parts[2]!=='devices'||parts[4]!=='agent-access')return null;
+  if(parts[3]!==localDeviceId)return {status:404,body:{error:'Local execution device not found'}};
+  if(method==='GET'&&parts.length===5)return this.checked('listAgentAccess /orgs/:orgId/devices/:deviceId/agent-access',this.store.list('question').filter(q=>this.live(q)).map(q=>this.row(q)));
+  if(method==='POST'&&parts.length===7&&['grant','deny'].includes(parts[6])){if(body.always)return {status:400,body:{error:'Only a single operation can be approved'}};const q=this.store.get('question',parts[5]);if(!q||!this.live(q))return {status:409,body:{error:'Permission request expired or already resolved'}};try{if(q.kind==='delivery')this.engine.deliveries.settle(q.id,parts[6]==='grant');else if(q.kind==='review')this.engine.reviews.settle(q.id,parts[6]==='grant');else this.engine.approve(q.id,parts[6]==='grant');}catch(error){return {status:409,body:{error:error.message}};}if(q.kind==='review')void Promise.resolve(this.engine.wakeCaptain?.('Review '+q.id+' for task '+q.taskId+' was '+(parts[6]==='grant'?'accepted':'declined')+' through the review control. Read current ledger before choosing the next action. Acceptance does not prove integration or deployment.',ownerId(this.store.get('session',q.sessionId)))).catch(()=>{});return this.checked((parts[6]==='grant'?'grantAgentAccess':'denyAgentAccess')+' /orgs/:orgId/devices/:deviceId/agent-access/:accessId/'+parts[6],this.row(this.store.get('question',q.id)));}
+  return null;
+ }
+}
